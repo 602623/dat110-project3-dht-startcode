@@ -59,6 +59,11 @@ public class FileManager {
 	public void createReplicaFiles() {
 	 	
 		// set a loop where size = numReplicas
+		for (int i = 0; i < numReplicas; i++) {
+			String filename = this.filename + i;
+			hash = Hash.hashOf(filename);
+			replicafiles[i] = hash;
+		}
 		
 		// replicate by adding the index to filename
 		
@@ -68,8 +73,7 @@ public class FileManager {
 	}
 	
     /**
-     * 
-     * @param bytesOfFile
+     *
      * @throws RemoteException 
      */
     public int distributeReplicastoPeers() throws RemoteException {
@@ -81,6 +85,15 @@ public class FileManager {
     	int counter = 0;
 	
     	// Task1: Given a filename, make replicas and distribute them to all active peers such that: pred < replica <= peer
+
+		createReplicaFiles();
+		for (int i = 0; i < numReplicas; i++) {
+			BigInteger replica = replicafiles[i];
+			NodeInterface succ = chordnode.findSuccessor(replica);
+			succ.addKey(replica);
+			succ.saveFileContent(filename, replica, bytesOfFile, counter == index);
+			counter++;
+		}
     	
     	// Task2: assign a replica as the primary for this file. Hint, see the slide (project 3) on Canvas
     	
@@ -109,13 +122,20 @@ public class FileManager {
 	public Set<Message> requestActiveNodesForFile(String filename) throws RemoteException {
 
 		this.filename = filename;
-		activeNodesforFile = new HashSet<Message>(); 
+		activeNodesforFile = new HashSet<>();
 
 		// Task: Given a filename, find all the peers that hold a copy of this file
 		
 		// generate the N replicas from the filename by calling createReplicaFiles()
+
+		createReplicaFiles();
 		
 		// iterate over the replicas of the file
+
+		for (int i = 0; i < numReplicas; i++) {
+			BigInteger replica = replicafiles[i];
+			activeNodesforFile.add(chordnode.findSuccessor(replica).getFilesMetadata(replica));
+		}
 		
 		// for each replica, do findSuccessor(replica) that returns successor s.
 		
@@ -135,6 +155,12 @@ public class FileManager {
 		// Task: Given all the active peers of a file (activeNodesforFile()), find which is holding the primary copy
 		
 		// iterate over the activeNodesforFile
+
+		for (Message message : activeNodesforFile) {
+			if(message.isPrimaryServer()) {
+				return Util.getProcessStub(message.getNodeName(), message.getPort());
+			}
+		}
 		
 		// for each active peer (saved as Message)
 		
@@ -150,7 +176,7 @@ public class FileManager {
      * @throws IOException 
      * @throws NoSuchAlgorithmException 
      */
-    public void readFile() throws IOException, NoSuchAlgorithmException {
+    public void readFile() throws IOException {
     	
     	File f = new File(filepath);
     	
@@ -238,7 +264,7 @@ public class FileManager {
 		return sizeOfByte;
 	}
 	/**
-	 * @param size the size to set
+	 * @param sizeOfByte the size to set
 	 */
 	public void setSizeOfByte(String sizeOfByte) {
 		this.sizeOfByte = sizeOfByte;
